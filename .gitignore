@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.python-version
+
+# Local data
+data/
+!data/.keep
+logs/
+
+# Secrets
+credentials/
+*.json
+.env
+config/accounts.yml
+
+# VSCode / IDE
+.idea/
+.vscode/
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+**/archive/

@@ -1,0 +1,41 @@
+default_sheet_id: "YOUR_DEFAULT_SHEET_ID_HERE"  # Optional global default if accounts don't specify sheet_id
+write_local_csv: false  # If true, also emit local Fina CSV files next to inputs
+
+accounts:
+  lloyds_cash:
+    bank: lloyds
+    currency: GBP
+    sheet_id: "YOUR_SHEET_ID_HERE"  # or omit to use default_sheet_id
+    worksheet: "ClubLloyds (cash)"
+    # Optional routing hints for auto_sync: filenames containing any of these will route here
+    # file_prefixes:
+    #   - "50038063"
+    inputs:
+      - "data/club-lloyds-jul1-oct18.csv"
+    sort:
+      column: "Date"
+      ascending: false
+    dedupe:
+      mode: "frequency"  # options: frequency | strict | smart
+      # When mode=smart, amounts <= small_amount_threshold use frequency-aware dedupe; larger txns use strict
+      # small_amount_threshold: 20
+  lloyds_credit:
+    bank: lloyds
+    currency: GBP
+    sheet_id: "YOUR_SHEET_ID_HERE"  # or omit to use default_sheet_id
+    worksheet: "LloydsCredit (credit)"
+    # file_prefixes:
+    #   - "4205"
+    inputs:
+      - "data/4205_02102025.csv"
+      - "data/4205_02072025.csv"
+      - "data/4205_02092025.csv"
+      - "data/4205_03082025.csv"
+    sort:
+      column: "Date"
+      ascending: false
+    dedupe:
+      mode: "frequency"
+
+google:
+  service_account_keyfile: "credentials/service_account.json"

@@ -1,0 +1,11 @@
+# Example connectors config
+
+connectors:
+  - provider: truelayer
+    account: lloyds_cash   # must match an account.name in accounts.yml for sheet routing
+    credentials:
+      client_id: "YOUR_CLIENT_ID"
+      client_secret: "YOUR_CLIENT_SECRET"
+      access_token: "YOUR_ACCESS_TOKEN"  # long-lived or refreshed elsewhere
+    options:
+      since: "2025-09-01"  # optional limit (YYYY-MM-DD)
