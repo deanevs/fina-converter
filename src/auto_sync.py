@@ -15,20 +15,17 @@ Routing rules:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 import shutil
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
-from src.utils.logger import logger
 from src.banks.lloyds import parse_lloyds_csv
-from src.sheets import fetch_existing_rows, append_rows
-from src.sheets import sort_worksheet
 from src.fina_writer import write_fina_csv
-from collections import Counter
-
-from src.personal_sync import _load_settings, Settings, AccountCfg
-
+from src.personal_sync import AccountCfg, Settings, _load_settings
+from src.sheets import append_rows, fetch_existing_rows, sort_worksheet
+from src.transaction_identity import filter_upload_rows
+from src.utils.logger import logger
 
 DATA_DIR = Path("data")
 PROCESSED_DIR = DATA_DIR / "processed"
@@ -61,15 +58,6 @@ def _route_file_to_account(filename: str, settings: Settings) -> Optional[Accoun
     return None
 
 
-def _base_key(rec: dict) -> Tuple[str, str, str, str]:
-    return (
-        rec.get("Date", ""),
-        rec.get("Amount", ""),
-        rec.get("Name", ""),
-        rec.get("Merchant", ""),
-    )
-
-
 def _process_file_for_account(csv_path: Path, settings: Settings, acct: AccountCfg) -> Tuple[int, int]:
     """Parse, dedupe vs sheet, append. Returns (appended, skipped_existing)."""
     bank = acct.bank.lower()
@@ -94,45 +82,9 @@ def _process_file_for_account(csv_path: Path, settings: Settings, acct: AccountC
         json_keyfile_path=settings.service_account_keyfile,
     )
 
-    src_counter = Counter(_base_key(r) for r in rows_list)
-    existing_counter = Counter(_base_key(r) for r in existing)
-    allowance = {k: max(0, src_counter[k] - existing_counter[k]) for k in src_counter}
-
-    to_upload: List[Dict[str, str]] = []
     mode = getattr(acct, "dedupe_mode", getattr(acct, "dedupe", "frequency"))
     threshold = getattr(acct, "dedupe_threshold", getattr(acct, "small_amount_threshold", None))
-    if mode == "strict":
-        seen = set(_base_key(r) for r in existing)
-        for r in rows_list:
-            k = _base_key(r)
-            if k in seen:
-                continue
-            seen.add(k)
-            to_upload.append(r)
-    elif mode in ("hybrid", "smart") and threshold is not None:
-        thr = float(threshold)
-        seen = set(_base_key(r) for r in existing)
-        def _amt(rec: dict) -> float:
-            try:
-                return float(str(rec.get("Amount", "0")).replace(",", ""))
-            except Exception:
-                return 0.0
-        for r in rows_list:
-            k = _base_key(r)
-            if abs(_amt(r)) <= thr:
-                if allowance.get(k, 0) > 0:
-                    to_upload.append(r)
-                    allowance[k] -= 1
-            else:
-                if k not in seen:
-                    to_upload.append(r)
-                    seen.add(k)
-    else:
-        for r in rows_list:
-            k = _base_key(r)
-            if allowance.get(k, 0) > 0:
-                to_upload.append(r)
-                allowance[k] -= 1
+    to_upload = filter_upload_rows(rows_list, existing, mode=mode, threshold=threshold)
 
     appended = append_rows(
         sheet_id=target_sheet_id,

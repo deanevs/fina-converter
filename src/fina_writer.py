@@ -1,5 +1,5 @@
 import csv
-from typing import Iterable, Dict
+from typing import Dict, Iterable
 
 FinaRow = Dict[str, str]
 
@@ -8,6 +8,7 @@ FIELDNAMES = [
     "Amount",
     "Name",
     "Merchant",
+    "txn_id",
     "Category",
     "Currency",
     "City",

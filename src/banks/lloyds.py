@@ -1,6 +1,9 @@
 import csv
+from collections import Counter
 from datetime import datetime
-from typing import Dict, Iterable, Iterator, List
+from typing import Dict, Iterator, List
+
+from src.transaction_identity import make_txn_id, norm_amount, norm_text
 from src.utils.logger import logger
 
 FinaRow = Dict[str, str]
@@ -23,7 +26,7 @@ def parse_lloyds_csv(path: str, currency: str = "GBP") -> Iterator[FinaRow]:
     Transaction Description, Debit Amount, Credit Amount, Balance
 
     Yields rows in Fina format: Date, Amount, Name, Merchant, Category,
-    Currency, City, Region
+    txn_id, Currency, City, Region
     """
     with open(path, mode="r", newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -31,6 +34,7 @@ def parse_lloyds_csv(path: str, currency: str = "GBP") -> Iterator[FinaRow]:
         fieldnames: List[str] = [fn.strip() for fn in (reader.fieldnames or [])]
         is_credit_schema = "Transaction Amount" in fieldnames
         logger.debug(f"lloyds.detect schema=credit:{is_credit_schema} fields={fieldnames}")
+        occurrence_counter: Counter[str] = Counter()
 
         for raw in reader:
             row = {k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in raw.items()}
@@ -59,11 +63,32 @@ def parse_lloyds_csv(path: str, currency: str = "GBP") -> Iterator[FinaRow]:
                 logger.debug(f"lloyds.parse skip row due to amount error: {e} row={row}")
                 continue
 
+            desc_key = norm_text(desc)
+            amount_key = norm_amount(f"{amount:.2f}")
+            balance_key = norm_amount(row.get("Balance", "")) if row.get("Balance") else ""
+            signature = "|".join(
+                [
+                    "lloyds",
+                    "credit" if is_credit_schema else "bank",
+                    date_iso,
+                    amount_key,
+                    desc_key,
+                    norm_text(row.get("Transaction Type", "")),
+                    norm_text(row.get("Sort Code", "")),
+                    norm_text(row.get("Account Number", "")),
+                    balance_key,
+                ]
+            )
+            occurrence = occurrence_counter[signature]
+            occurrence_counter[signature] += 1
+            txn_id = make_txn_id(signature, occurrence)
+
             fina_row: FinaRow = {
                 "Date": date_iso,
                 "Amount": f"{amount:.2f}",
                 "Name": desc,
                 "Merchant": desc,
+                "txn_id": txn_id,
                 "Category": "",
                 "Currency": currency,
                 "City": "",

@@ -6,9 +6,9 @@ plug them into connector_sync.py.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, Dict, Optional
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Dict, Iterable, Optional
 
 FinaRow = Dict[str, str]
 
@@ -30,7 +30,7 @@ class BaseConnector(ABC):
         """
         Yield Fina rows. since_iso_date is YYYY-MM-DD to limit range.
         Must map provider fields to the Fina schema:
-        Date, Amount, Name, Merchant, Category, Currency, City, Region
+        Date, Amount, Name, Merchant, txn_id, Category, Currency, City, Region
         """
         ...
 

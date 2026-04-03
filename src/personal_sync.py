@@ -13,16 +13,15 @@ Requirements:
         must have Editor access to the target spreadsheet.
 """
 
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
 import os
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional
 
-from collections import Counter
 from src.banks.lloyds import parse_lloyds_csv
-from src.sheets import append_rows, fetch_existing_rows, sort_worksheet
 from src.fina_writer import write_fina_csv
-from collections import Counter
+from src.sheets import append_rows, fetch_existing_rows, sort_worksheet
+from src.transaction_identity import filter_upload_rows
 from src.utils.logger import logger
 
 try:
@@ -153,57 +152,12 @@ def process_account(settings: Settings, acct: AccountCfg):
             json_keyfile_path=settings.service_account_keyfile,
         )
 
-        def base_key(rec: dict) -> Tuple[str, str, str, str]:
-            return (
-                rec.get("Date", ""),
-                rec.get("Amount", ""),
-                rec.get("Name", ""),
-                rec.get("Merchant", ""),
-            )
-
-        to_upload: List[dict] = []
-        if acct.dedupe == "strict":
-            seen = set(base_key(r) for r in existing)
-            for r in rows_list:
-                k = base_key(r)
-                if k in seen:
-                    continue
-                seen.add(k)
-                to_upload.append(r)
-        elif acct.dedupe == "smart" and acct.small_amount_threshold is not None:
-            # For amounts <= threshold, use frequency-aware allowance; else strict
-            src_counter = Counter(base_key(r) for r in rows_list)
-            existing_counter = Counter(base_key(r) for r in existing)
-            allowance = {k: max(0, src_counter[k] - existing_counter[k]) for k in src_counter}
-            seen = set(base_key(r) for r in existing)
-
-            def _amt(rec: dict) -> float:
-                try:
-                    return float(str(rec.get("Amount", "0")).replace(",", ""))
-                except Exception:
-                    return 0.0
-
-            thr = float(acct.small_amount_threshold)
-            for r in rows_list:
-                k = base_key(r)
-                if abs(_amt(r)) <= thr:
-                    if allowance.get(k, 0) > 0:
-                        to_upload.append(r)
-                        allowance[k] -= 1
-                else:
-                    if k not in seen:
-                        to_upload.append(r)
-                        seen.add(k)
-        else:
-            # frequency-aware (default)
-            src_counter = Counter(base_key(r) for r in rows_list)
-            existing_counter = Counter(base_key(r) for r in existing)
-            allowance = {k: max(0, src_counter[k] - existing_counter[k]) for k in src_counter}
-            for r in rows_list:
-                k = base_key(r)
-                if allowance.get(k, 0) > 0:
-                    to_upload.append(r)
-                    allowance[k] -= 1
+        to_upload = filter_upload_rows(
+            rows_list,
+            existing,
+            mode=acct.dedupe,
+            threshold=acct.small_amount_threshold,
+        )
 
         appended = append_rows(
             sheet_id=target_sheet_id,

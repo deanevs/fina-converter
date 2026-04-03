@@ -9,19 +9,23 @@ Config: see config/connectors.example.yml
 """
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
+from typing import Dict, List
 
 try:
     import yaml
 except Exception:
     yaml = None
 
-from src.utils.logger import logger
-from src.sheets import fetch_existing_rows, append_rows, sort_worksheet
-from src.personal_sync import _load_settings, AccountCfg, Settings  # reuse sheet config and behavior
 from src.connectors.base import ConnectorConfig, connector_from_config
+from src.personal_sync import (  # reuse sheet config and behavior
+    AccountCfg,
+    _load_settings,
+)
+from src.sheets import append_rows, fetch_existing_rows, sort_worksheet
+from src.transaction_identity import filter_upload_rows
+from src.utils.logger import logger
 
 
 @dataclass
@@ -46,17 +50,6 @@ def _load_connector_settings(path: str = "config/connectors.yml") -> ConnectorSe
             )
         )
     return ConnectorSettings(connectors=conns)
-
-
-def _base_key(rec: dict) -> Tuple[str, str, str, str]:
-    return (
-        rec.get("Date", ""),
-        rec.get("Amount", ""),
-        rec.get("Name", ""),
-        rec.get("Merchant", ""),
-    )
-
-
 def main():
     settings = _load_settings()
     cset = _load_connector_settings()
@@ -97,27 +90,12 @@ def main():
             json_keyfile_path=settings.service_account_keyfile,
         )
 
-        # Dedupe: use account's configured mode
-        to_upload: List[Dict[str, str]] = []
-        if getattr(acct, "dedupe", "frequency") == "strict":
-            seen = set(_base_key(r) for r in existing)
-            for r in rows:
-                k = _base_key(r)
-                if k in seen:
-                    continue
-                seen.add(k)
-                to_upload.append(r)
-        else:
-            # frequency-aware: number of occurrences in source minus existing
-            from collections import Counter
-            src_counter = Counter(_base_key(r) for r in rows)
-            existing_counter = Counter(_base_key(r) for r in existing)
-            allowance = {k: max(0, src_counter[k] - existing_counter[k]) for k in src_counter}
-            for r in rows:
-                k = _base_key(r)
-                if allowance.get(k, 0) > 0:
-                    to_upload.append(r)
-                    allowance[k] -= 1
+        to_upload = filter_upload_rows(
+            rows,
+            existing,
+            mode=getattr(acct, "dedupe", "frequency"),
+            threshold=getattr(acct, "small_amount_threshold", None),
+        )
 
         if not to_upload:
             logger.info(f"connector_sync.no_new_rows account={acct.name}")

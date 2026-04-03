@@ -21,8 +21,8 @@ Quick start
 
 What happens
 ------------
-- Parses Lloyds CSVs into the Fina schema: `Date, Amount, Name, Merchant, Category, Currency, City, Region`
-- Dedupes vs existing rows by base keys (Date, Amount, Name, Merchant) with frequency-aware allowance
+- Parses Lloyds CSVs into the Fina schema: `Date, Amount, Name, Merchant, txn_id, Category, Currency, City, Region`
+- Generates a stable `txn_id` during parsing and dedupes against Sheets using that id when available
 - Appends only new rows, initializes header if absent, then auto-sorts by your config
 - Moves each processed file into `data/processed/`
 
@@ -60,7 +60,7 @@ Troubleshooting
   - Enable in `config/accounts.yml` with `sort: { column: "Date", ascending: false }`
   - Dates must be real dates in Sheets (Format > Number > Date)
 - Duplicates:
-  - We dedupe by Date/Amount/Name/Merchant. If descriptions vary, consider normalizing names (we can extend the parser if needed)
+  - We dedupe by `txn_id` for newly imported rows, with a compatibility fallback for older sheet rows that predate the `txn_id` column
 
 See also (Obsidian)
 -------------------

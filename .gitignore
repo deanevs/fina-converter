@@ -31,3 +31,4 @@ wheels/
 .venv
 
 **/archive/
+.DS_Store

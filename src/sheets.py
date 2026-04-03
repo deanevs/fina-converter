@@ -1,5 +1,6 @@
-from typing import Iterable, Dict, List, Optional, Union
 import os
+from typing import Dict, Iterable, List, Union
+
 from src.utils.logger import logger
 
 try:
@@ -61,11 +62,12 @@ def append_rows(sheet_id: str, worksheet_name: str, rows: Iterable[FinaRow], jso
         header = FIELDNAMES
     else:
         # If required fields are missing, prefer FIELDNAMES order for mapping
-        required = set(["Date","Amount","Name","Merchant","Category","Currency","City","Region"])
+        required = set(["Date", "Amount", "Name", "Merchant", "txn_id", "Category", "Currency", "City", "Region"])
         header_stripped = [h.strip() for h in header]
         if not required.issubset(set(header_stripped)):
             header = FIELDNAMES
             header_stripped = FIELDNAMES
+            ws.update('1:1', [FIELDNAMES])
     # Map using stripped header keys to avoid whitespace mismatches
     header_stripped = [h.strip() for h in header]
     out_rows: List[List[str]] = []
