@@ -66,8 +66,10 @@ def _load_settings() -> Settings:
             write_local_csv=False,
             accounts=[],
         )
+
     with open(cfg_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
+
     google = data.get("google", {})
     svc_key = google.get("service_account_keyfile", "credentials/service_account.json")
     # accounts.yml structure: accounts: { name: {bank, currency, sheet_id, worksheet, inputs?, sort?, dedupe?}}
