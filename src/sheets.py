@@ -1,6 +1,7 @@
 import os
 from typing import Dict, Iterable, List, Union
 
+from src.fina_writer import FIELDNAMES
 from src.utils.logger import logger
 
 try:
@@ -11,6 +12,7 @@ except Exception:  # dependencies may not be installed yet
     Credentials = None
 
 FinaRow = Dict[str, str]
+REQUIRED_FINA_COLUMNS = {"Date", "Amount", "Name", "Merchant"}
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -86,6 +88,33 @@ def append_rows(sheet_id: str, worksheet_name: str, rows: Iterable[FinaRow], jso
     return total
 
 
+def _looks_like_header(header: List[str]) -> bool:
+    normalized = {cell.strip() for cell in header if cell.strip()}
+    return REQUIRED_FINA_COLUMNS.issubset(normalized)
+
+
+def _records_from_values(values: List[List[str]]) -> List[FinaRow]:
+    if not values:
+        return []
+
+    first_row = [cell.strip() for cell in values[0]]
+    if _looks_like_header(first_row):
+        header = first_row
+        data_rows = values[1:]
+    else:
+        header = FIELDNAMES
+        data_rows = values
+
+    width = len(header)
+    records: List[FinaRow] = []
+    for row in data_rows:
+        padded = list(row[:width]) + [""] * max(0, width - len(row))
+        record = {header[idx]: (padded[idx] if idx < len(padded) else "") for idx in range(width) if header[idx]}
+        if any(value.strip() for value in record.values()):
+            records.append(record)
+    return records
+
+
 def fetch_existing_rows(sheet_id: str, worksheet_name: str, json_keyfile_path: str) -> List[FinaRow]:
     """Return existing rows as list of dicts using the current header.
     If no header, returns an empty list.
@@ -105,13 +134,11 @@ def fetch_existing_rows(sheet_id: str, worksheet_name: str, json_keyfile_path: s
             logger.info(f"sheets.worksheet_missing worksheet='{worksheet_name}', returning empty list")
             return []
         raise
-    header: List[str] = ws.row_values(1)
-    if not header:
-        return []
-    # get_all_records uses the first row as header by default
-    records = ws.get_all_records(default_blank="")
-    # Ensure keys match header capitalization/spacing used in Fina
-    # gspread normalizes keys from the header row, so we pass through
+    values = ws.get_all_values()
+    records = _records_from_values(values)
+    logger.debug(
+        f"sheets.fetch_existing loaded={len(records)} worksheet='{worksheet_name}' header_mode={'sheet' if values and _looks_like_header([cell.strip() for cell in values[0]]) else 'fallback'}"
+    )
     return [
         {k.strip(): (str(v) if v is not None else "") for k, v in rec.items()}
         for rec in records
