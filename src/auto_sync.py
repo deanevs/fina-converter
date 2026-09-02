@@ -34,18 +34,15 @@ PROCESSED_DIR = DATA_DIR / "processed"
 def _account_prefixes_map(settings: Settings) -> Dict[str, List[str]]:
     """Return a map of account.name -> file_prefixes (may be empty)."""
     prefixes: Dict[str, List[str]] = {}
-    # file_prefixes may be set in YAML under each account; it's not part of AccountCfg dataclass,
-    # so we can't read it directly from the object. We will attempt to re-open the YAML lazily.
-    # To keep it simple and robust, we'll rely on filename heuristics here and use known defaults.
-    # If you want strict config-driven routing, add file_prefixes to your YAML and extend the loader.
     for acc in settings.accounts:
-        prefixes[acc.name] = []
-    # Known convenient defaults (based on user context)
-    names = {a.name for a in settings.accounts}
-    if "lloyds_cash" in names:
-        prefixes["lloyds_cash"].extend(["50038063"])  # cash account number
-    if "lloyds_credit" in names:
-        prefixes["lloyds_credit"].extend(["4205"])  # credit card tail/prefix
+        acc_prefixes = [str(p) for p in getattr(acc, "file_prefixes", []) if p]
+        if not acc_prefixes:
+            # Known convenient defaults for legacy config without file_prefixes
+            if acc.name == "lloyds_cash":
+                acc_prefixes.append("50038063")
+            elif acc.name == "lloyds_credit":
+                acc_prefixes.append("4205")
+        prefixes[acc.name] = acc_prefixes
     return prefixes
 
 

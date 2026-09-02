@@ -14,9 +14,8 @@ Requirements:
 """
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from src.banks.lloyds import parse_lloyds_csv
 from src.fina_writer import write_fina_csv
@@ -26,7 +25,7 @@ from src.utils.logger import logger
 
 try:
     import yaml
-except Exception:
+except ImportError:
     yaml = None
 
 
@@ -36,23 +35,24 @@ class AccountCfg:
     bank: str
     currency: str
     worksheet: str
-    inputs: List[str]
-    sheet_id: Optional[str] = None  # Optional per-account override
+    inputs: list[str]
+    sheet_id: str | None = None  # Optional per-account override
+    file_prefixes: list[str] = field(default_factory=list)
     # Dedupe mode: 'frequency' (default) allows repeated identical rows if present in the source;
     # 'strict' allows at most one per key; 'smart' uses strict for large amounts and frequency for small amounts.
     dedupe: str = "frequency"
-    small_amount_threshold: Optional[float] = None
+    small_amount_threshold: float | None = None
     # Optional post-append sorting
-    sort_column: Optional[str] = None
+    sort_column: str | None = None
     sort_ascending: bool = False
 
 
 @dataclass
 class Settings:
     service_account_keyfile: str
-    sheet_id: Optional[str]  # global default (fallback if account.sheet_id not set)
+    sheet_id: str | None  # global default (fallback if account.sheet_id not set)
     write_local_csv: bool
-    accounts: List[AccountCfg]
+    accounts: list[AccountCfg]
 
 
 def _load_settings() -> Settings:
@@ -73,8 +73,8 @@ def _load_settings() -> Settings:
     google = data.get("google", {})
     svc_key = google.get("service_account_keyfile", "credentials/service_account.json")
     # accounts.yml structure: accounts: { name: {bank, currency, sheet_id, worksheet, inputs?, sort?, dedupe?}}
-    accounts_map: Dict[str, Dict] = data.get("accounts", {})
-    accs: List[AccountCfg] = []
+    accounts_map: dict[str, dict] = data.get("accounts", {})
+    accs: list[AccountCfg] = []
     for name, a in accounts_map.items():
         inputs = a.get("inputs", [])  # allow optional inputs in YAML for convenience
         sort_cfg = a.get("sort") or {}
@@ -91,10 +91,16 @@ def _load_settings() -> Settings:
             if raw_thr is not None:
                 try:
                     small_amount_threshold = float(raw_thr)
-                except Exception:
+                except (TypeError, ValueError):
                     small_amount_threshold = None
         else:
             dedupe_mode = str(dedupe_cfg).lower()
+
+        prefixes = a.get("file_prefixes", [])
+        if not isinstance(prefixes, list):
+            prefixes = []
+        prefixes = [str(p) for p in prefixes if p is not None]
+
         accs.append(
             AccountCfg(
                 name=name,
@@ -103,6 +109,7 @@ def _load_settings() -> Settings:
                 worksheet=a.get("worksheet", "Transactions"),
                 inputs=inputs,
                 sheet_id=a.get("sheet_id"),
+                file_prefixes=prefixes,
                 dedupe=dedupe_mode,
                 small_amount_threshold=small_amount_threshold,
                 sort_column=sort_cfg.get("column"),
