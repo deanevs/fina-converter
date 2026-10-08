@@ -16,7 +16,7 @@ Quick start
 4) Share each spreadsheet with your service account email (Editor).
 5) Run:
    ```zsh
-uv run python -m src.auto_sync
+   uv run python -m src.auto_sync
    ```
 
 What happens
